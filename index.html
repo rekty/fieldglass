@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fieldglass — point your camera, learn what you see</title>
+<meta name="description" content="Point your camera at a rock, a plant or a building. A Pollinations vision model tells you what it is and what to notice, and reads the answer aloud.">
+<style>
+  :root {
+    --bg: #0b1210;
+    --panel: #121b18;
+    --panel-2: #18241f;
+    --line: #27362f;
+    --ink: #e9f0ea;
+    --muted: #93a89b;
+    --accent: #4fd1a5;
+    --accent-2: #e9b949;
+    --ok: #4fd1a5;
+    --bad: #ff7b72;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  [hidden] { display: none !important; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #17352b 0%, transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); }
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+    background: rgba(11,18,16,.72); backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .brand { font-weight: 700; letter-spacing: -.02em; font-size: 17px; }
+  .brand span {
+    background: linear-gradient(95deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 10px; border-radius: 999px; font-size: 12px;
+    border: 1px solid var(--line); color: var(--muted); background: var(--panel);
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pill b { color: var(--ink); font-weight: 600; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(79,209,165,.14); }
+  button {
+    font: inherit; cursor: pointer; border-radius: 11px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+    padding: 10px 14px; transition: border-color .15s, transform .05s, opacity .15s;
+  }
+  button:hover:not(:disabled) { border-color: #375049; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary {
+    border: 0; color: #08120e; font-weight: 650;
+    background: linear-gradient(95deg, var(--accent) 0%, #7fe6c4 100%);
+  }
+  button.ghost { background: transparent; }
+  main { max-width: 1120px; margin: 0 auto; padding: 18px 18px 40px; }
+  .grid { display: grid; grid-template-columns: minmax(300px, 430px) 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 14px;
+  }
+  .card h2 {
+    margin: 0 0 10px; font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted); font-weight: 700;
+  }
+  #viewer {
+    position: relative; border-radius: 13px; overflow: hidden;
+    background: #060b09; border: 1px solid var(--line);
+    aspect-ratio: 4 / 3; display: grid; place-items: center;
+  }
+  #video, #shot { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #viewer-empty {
+    position: absolute; inset: 0; display: grid; place-content: center;
+    text-align: center; gap: 6px; padding: 22px; color: var(--muted); font-size: 13.5px;
+  }
+  #viewer-empty b { color: var(--ink); font-size: 15px; font-weight: 600; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .row button { flex: 1 1 auto; }
+  label.field { display: block; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  select, input[type="text"] {
+    font: inherit; color: var(--ink); background: #0d1714;
+    border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; width: 100%;
+  }
+  select { margin-top: 5px; }
+  select:focus, input:focus, button:focus-visible, textarea:focus {
+    outline: 2px solid rgba(79,209,165,.45); outline-offset: 1px;
+  }
+  #status { min-height: 20px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  #status.err { color: var(--bad); }
+  #card-title { font-size: 20px; font-weight: 650; letter-spacing: -.01em; margin: 0 0 2px; }
+  #card-what { color: var(--accent-2); font-size: 13.5px; margin: 0 0 12px; }
+  .conf { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .conf.high { color: var(--ok); border-color: rgba(79,209,165,.4); }
+  .conf.low { color: var(--accent-2); border-color: rgba(233,185,73,.4); }
+  #overview { margin: 0 0 14px; }
+  ul.notes { margin: 0 0 14px; padding: 0; list-style: none; display: grid; gap: 9px; }
+  ul.notes li {
+    display: grid; grid-template-columns: 22px 1fr; gap: 9px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 11px; padding: 10px 12px; font-size: 14px;
+  }
+  ul.notes li .mark { color: var(--accent); font-weight: 700; }
+  .qa { display: flex; gap: 8px; margin-top: 8px; }
+  .qa input { flex: 1; }
+  #answers { display: grid; gap: 10px; margin-top: 12px; }
+  .answer { border-left: 2px solid var(--accent); padding: 2px 0 2px 11px; font-size: 14px; }
+  .answer p { margin: 0 0 4px; }
+  .answer .q { color: var(--muted); font-size: 12.5px; margin: 0 0 3px; }
+  #placeholder { color: var(--muted); font-size: 14px; }
+  #placeholder b { color: var(--ink); }
+  dialog {
+    border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
+    color: var(--ink); padding: 20px; max-width: 460px; width: calc(100% - 36px);
+  }
+  dialog::backdrop { background: rgba(4,8,6,.74); }
+  dialog h3 { margin: 0 0 6px; font-size: 17px; }
+  .code {
+    font: 600 26px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .16em;
+    padding: 12px 14px; border-radius: 10px; background: #0d1714; border: 1px solid var(--line);
+    display: inline-block; margin: 10px 0;
+  }
+  .fine { color: var(--muted); font-size: 12.5px; }
+  footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 8px 18px 34px; }
+  footer p { margin: 9px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Field<span>glass</span></div>
+  <span class="pill" title="Vision model"><b id="model-name">openai/gpt-5.4-nano</b></span>
+  <span class="pill"><span class="dot" id="auth-dot"></span><span id="auth-text">signed out</span></span>
+  <div class="spacer"></div>
+  <button class="ghost" id="btn-signin">Sign in with Pollinations</button>
+  <button class="ghost" id="btn-signout" hidden>Sign out</button>
+</header>
+
+<main>
+  <div class="grid">
+    <section class="card">
+      <h2>What are you looking at?</h2>
+      <div id="viewer">
+        <video id="video" playsinline muted autoplay hidden></video>
+        <img id="shot" alt="The photo being explained" hidden>
+        <div id="viewer-empty">
+          <b>Start the camera</b>
+          <span>or pick a photo from this device.</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="primary" id="btn-camera">Start camera</button>
+        <button id="btn-capture" disabled>Take picture</button>
+      </div>
+      <div class="row">
+        <button class="ghost" id="btn-file">Choose a photo</button>
+        <button class="ghost" id="btn-retake" hidden>Retake</button>
+      </div>
+      <input type="file" id="file" accept="image/*" capture="environment" hidden>
+
+      <label class="field">Look for
+        <select id="focus">
+          <option value="anything">Anything</option>
+          <option value="geology and landforms (rock type, how it formed, what the layers and texture mean)">Geology and landforms</option>
+          <option value="plants, trees and animals (species-level when the photo allows it, and what gives it away)">Plants and animals</option>
+          <option value="architecture and building materials (style, period, structure, materials)">Architecture</option>
+          <option value="everyday objects and materials (what it is, how it is made, what to notice)">Objects and materials</option>
+        </select>
+      </label>
+
+      <label class="field">Explanation model
+        <select id="model"></select>
+      </label>
+
+      <div id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card" id="explain">
+      <h2>Reading</h2>
+      <div id="placeholder">
+        <b>Nothing explained yet.</b><br>
+        Point the camera at something and take a picture — or choose a photo. You get what it is,
+        what to notice, and a short answer to any question you ask about it.
+      </div>
+
+      <article id="reading" hidden>
+        <h3 id="card-title"></h3>
+        <p id="card-what"><span id="what"></span> <span class="conf" id="conf"></span></p>
+        <p id="overview"></p>
+        <ul class="notes" id="notes"></ul>
+        <div class="row" style="margin-top:0">
+          <button id="btn-speak">Read aloud</button>
+          <button class="ghost" id="btn-stop-speak" hidden>Stop</button>
+        </div>
+        <div class="qa">
+          <input type="text" id="question" placeholder="Ask about it: “why is it that colour?”">
+          <button id="btn-ask">Ask</button>
+        </div>
+        <div id="answers"></div>
+      </article>
+    </section>
+  </div>
+</main>
+
+<dialog id="signin-dialog">
+  <h3>Sign in with Pollinations</h3>
+  <p class="hint fine" style="margin:0 0 4px">Open the link, approve the code, and this tab signs itself in. The token lives in this tab only.</p>
+  <div class="code" id="device-code">…</div>
+  <p><a id="device-link" href="#" target="_blank" rel="noopener">Open the approval page</a></p>
+  <p class="fine" id="device-note">Waiting for approval…</p>
+  <div class="row"><button class="ghost" id="btn-cancel-signin">Cancel</button></div>
+</dialog>
+
+<footer>
+  <a href="https://pollinations.ai/?ref=badge" target="_blank" rel="noopener">
+    <img src="docs/badge-made-with.svg" alt="Made with pollinations.ai" width="174" height="20" style="vertical-align:middle">
+  </a>
+  <p>
+    Photos go to Pollinations vision and text models with your own balance.
+    Nothing is uploaded until you press Take picture or Choose a photo, and nothing is stored by this page.
+  </p>
+</footer>
+
+<script>
+const ENTER = "https://enter.pollinations.ai";
+const GEN = "https://gen.pollinations.ai";
+const TOKEN_KEY = "fieldglass.token";
+const MODELS = [
+  "openai/gpt-5.4-nano",
+  "openai/gpt-5.3-codex",
+  "minimax/minimax-m3.1-flash",
+  "openai/gpt-6.1-terra",
+];
+const TTS_MODEL = "openai/tts-1";
+const MAX_EDGE = 1024;
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  token: null,
+  photo: null,      // data URL of the current picture
+  reading: null,    // last structured reading
+  stream: null,
+  busy: false,
+  poll: null,
+  audio: null,
+};
+
+/* ---------------- sign-in: Pollinations device flow ---------------- */
+
+function readToken() {
+  try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+function saveToken(token) {
+  try { token ? sessionStorage.setItem(TOKEN_KEY, token) : sessionStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ }
+  state.token = token;
+  paintAuth();
+}
+function paintAuth() {
+  const on = Boolean(state.token);
+  $("auth-dot").classList.toggle("on", on);
+  $("auth-text").textContent = on ? "signed in" : "signed out";
+  $("btn-signin").hidden = on;
+  $("btn-signout").hidden = !on;
+}
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text.slice(0, 300) }; }
+  if (!res.ok) throw new Error(`${res.status} ${data.error || data.raw || res.statusText}`);
+  return data;
+}
+
+async function signIn() {
+  const dialog = $("signin-dialog");
+  dialog.showModal();
+  $("device-note").textContent = "Waiting for approval…";
+  let device;
+  try {
+    device = await postJson(`${ENTER}/api/device/code`, { scope: "generate" });
+  } catch (error) {
+    $("device-note").textContent = `Could not start sign-in: ${error.message}`;
+    return;
+  }
+  $("device-code").textContent = device.user_code;
+  const url = device.verification_uri_complete || device.verification_uri;
+  $("device-link").href = url;
+  window.open(url, "_blank", "noopener");
+
+  const interval = Math.max(3, Number(device.interval) || 5);
+  const deadline = Date.now() + (Number(device.expires_in) || 1800) * 1000;
+  clearInterval(state.poll);
+  state.poll = setInterval(async () => {
+    if (Date.now() > deadline) {
+      clearInterval(state.poll);
+      $("device-note").textContent = "The code expired. Press Sign in again.";
+      return;
+    }
+    try {
+      const token = await postJson(`${ENTER}/api/device/token`, {
+        device_code: device.device_code,
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      });
+      if (token.access_token) {
+        clearInterval(state.poll);
+        saveToken(token.access_token);
+        dialog.close();
+        setStatus("Signed in. Take a picture to get a reading.");
+      }
+    } catch (error) {
+      const message = String(error.message || "");
+      if (!message.startsWith("400") && !/pending|slow_down/i.test(message)) {
+        clearInterval(state.poll);
+        $("device-note").textContent = `Sign-in failed: ${message}`;
+      }
+    }
+  }, interval * 1000);
+}
+
+function cancelSignIn() {
+  clearInterval(state.poll);
+  const dialog = $("signin-dialog");
+  if (dialog.open) dialog.close();
+}
+
+/* ---------------- camera and files ---------------- */
+
+function stopStream() {
+  if (state.stream) {
+    for (const track of state.stream.getTracks()) track.stop();
+    state.stream = null;
+  }
+}
+
+async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus("This browser has no camera API. Use “Choose a photo” instead.", true);
+    return;
+  }
+  try {
+    state.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
+      audio: false,
+    });
+    const video = $("video");
+    video.srcObject = state.stream;
+    video.hidden = false;
+    $("shot").hidden = true;
+    $("viewer-empty").hidden = true;
+    $("btn-capture").disabled = false;
+    $("btn-camera").textContent = "Camera is on";
+    setStatus("Point at something and press Take picture.");
+  } catch (error) {
+    setStatus(`Camera unavailable (${error.name || error.message}). Use “Choose a photo” instead.`, true);
+  }
+}
+
+function shrink(source, width, height) {
+  const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+function usePhoto(dataUrl) {
+  stopStream();
+  state.photo = dataUrl;
+  state.reading = null;
+  $("answers").textContent = "";
+  const img = $("shot");
+  img.src = dataUrl;
+  img.hidden = false;
+  $("video").hidden = true;
+  $("viewer-empty").hidden = true;
+  $("btn-capture").disabled = true;
+  $("btn-retake").hidden = false;
+  $("btn-camera").textContent = "Start camera";
+  $("reading").hidden = true;
+  $("placeholder").hidden = false;
+  explain();
+}
+
+function capture() {
+  const video = $("video");
+  if (!state.stream || !video.videoWidth) {
+    setStatus("The camera is not ready yet. Give it a second, then press Take picture again.", true);
+    return;
+  }
+  usePhoto(shrink(video, video.videoWidth, video.videoHeight));
+}
+
+function pickFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => usePhoto(shrink(img, img.naturalWidth, img.naturalHeight));
+    img.onerror = () => setStatus("That file is not an image this browser can read.", true);
+    img.src = String(reader.result);
+  };
+  reader.readAsDataURL(file);
+  event.target.value = "";
+}
+
+/* ---------------- the model calls ---------------- */
+
+function setStatus(message, isError = false) {
+  const node = $("status");
+  node.textContent = message;
+  node.classList.toggle("err", Boolean(isError));
+}
+
+const SYSTEM = [
+  "You are a patient field guide. The user photographed something they want to understand.",
+  "Answer only from what is visible plus solid general knowledge, and say plainly when the photo is not enough.",
+  'Reply with JSON only, no prose and no code fences: {"title":string,"what":string,"confidence":"high"|"medium"|"low","overview":string,"noticing":string[],"uncertain":string}',
+  "Rules:",
+  "- title: a short name for what was photographed, at most 6 words.",
+  "- what: the identification, one line. If you cannot identify it, name the category instead (for example \"a sedimentary rock, likely sandstone\").",
+  "- confidence reflects the photo only: high when the identifying features are visible, low when it is a guess.",
+  "- overview: 2 to 3 sentences of plain explanation, no jargon without a gloss.",
+  "- noticing: exactly 3 bullets, each one thing a person could confirm with their own eyes in this picture.",
+  "- uncertain: one sentence naming what a closer or second photo would settle. If nothing is uncertain, say what else is worth a photo.",
+].join("\n");
+
+async function callVision(model, question, focus) {
+  const lines = [`Look-for: ${focus}.`, "Explain this photo."];
+  if (question) lines.push(`The user also asks: ${question}`);
+  const body = {
+    model,
+    response_format: { type: "json_object" },
+    temperature: 0.4,
+    messages: [
+      { role: "system", content: SYSTEM },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: lines.join("\n") },
+          { type: "image_url", image_url: { url: state.photo } },
+        ],
+      },
+    ],
+  };
+  const res = await fetch(`${GEN}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${state.token}` },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${res.status} ${text.slice(0, 220)}`);
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(`the model sent non-JSON: ${text.slice(0, 140)}`); }
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) throw new Error("the model returned an empty message");
+  return content;
+}
+
+function parseReading(content) {
+  let text = String(content).trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) text = fence[1].trim();
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start > 0 || end < text.length - 1) text = text.slice(start, end + 1);
+  const raw = JSON.parse(text);
+  const confidence = ["high", "medium", "low"].includes(raw.confidence) ? raw.confidence : "medium";
+  return {
+    title: String(raw.title || "Unnamed").slice(0, 80),
+    what: String(raw.what || "").slice(0, 200),
+    confidence,
+    overview: String(raw.overview || "").slice(0, 800),
+    noticing: (Array.isArray(raw.noticing) ? raw.noticing : []).slice(0, 3).map((n) => String(n).slice(0, 240)),
+    uncertain: String(raw.uncertain || "").slice(0, 300),
+  };
+}
+
+function paintReading(reading) {
+  state.reading = reading;
+  $("placeholder").hidden = true;
+  $("reading").hidden = false;
+  $("card-title").textContent = reading.title;
+  $("what").textContent = reading.what;
+  const conf = $("conf");
+  conf.textContent = `${reading.confidence} confidence`;
+  conf.className = `conf ${reading.confidence}`;
+  $("overview").textContent = reading.overview;
+
+  const notes = $("notes");
+  notes.textContent = "";
+  const items = reading.noticing.length ? reading.noticing : [reading.uncertain];
+  items.forEach((note, index) => {
+    const li = document.createElement("li");
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.textContent = String(index + 1);
+    const text = document.createElement("span");
+    text.textContent = note;
+    li.append(mark, text);
+    notes.append(li);
+  });
+  if (reading.uncertain && reading.noticing.length) {
+    const li = document.createElement("li");
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.textContent = "?";
+    const text = document.createElement("span");
+    text.textContent = reading.uncertain;
+    li.append(mark, text);
+    notes.append(li);
+  }
+}
+
+async function explain() {
+  if (state.busy) return;
+  if (!state.token) {
+    setStatus("Sign in first: the reading is generated with your own Pollinations balance.", true);
+    return;
+  }
+  if (!state.photo) { setStatus("Take a picture or choose a photo first.", true); return; }
+
+  state.busy = true;
+  $("btn-ask").disabled = true;
+  const model = $("model").value;
+  try {
+    setStatus(`Reading the photo with ${model}…`);
+    const reading = parseReading(await callVision(model, null, $("focus").value));
+    paintReading(reading);
+    setStatus(`Done: “${reading.title}” (${reading.confidence} confidence).`);
+  } catch (error) {
+    setStatus(`${error.message}`, true);
+  } finally {
+    state.busy = false;
+    $("btn-ask").disabled = false;
+  }
+}
+
+function addAnswer(question, answer) {
+  const wrap = document.createElement("div");
+  wrap.className = "answer";
+  const q = document.createElement("p");
+  q.className = "q";
+  q.textContent = `You asked: ${question}`;
+  const a = document.createElement("p");
+  a.textContent = answer;
+  wrap.append(q, a);
+  $("answers").prepend(wrap);
+}
+
+async function ask() {
+  const question = $("question").value.trim();
+  if (!question) { setStatus("Type a question about the photo first.", true); return; }
+  if (!state.token) { setStatus("Sign in first: answers use your own Pollinations balance.", true); return; }
+  if (state.busy) return;
+
+  state.busy = true;
+  $("btn-ask").disabled = true;
+  try {
+    setStatus("Asking about the photo…");
+    const content = await callVision($("model").value, question, $("focus").value);
+    const reading = parseReading(content);
+    addAnswer(question, [reading.what, reading.overview].filter(Boolean).join(" "));
+    $("question").value = "";
+    setStatus("Answered. Ask another, or take a new picture.");
+  } catch (error) {
+    setStatus(`${error.message}`, true);
+  } finally {
+    state.busy = false;
+    $("btn-ask").disabled = false;
+  }
+}
+
+/* ---------------- read aloud ---------------- */
+
+async function speak() {
+  if (!state.reading) return;
+  if (!state.token) { setStatus("Sign in first: read-aloud uses your own Pollinations balance.", true); return; }
+  const reading = state.reading;
+  const input = [reading.what, reading.overview, ...reading.noticing].filter(Boolean).join(" ");
+  try {
+    setStatus("Preparing audio…");
+    const res = await fetch(`${GEN}/v1/audio/speech`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${state.token}` },
+      body: JSON.stringify({ model: TTS_MODEL, voice: "nova", input: input.slice(0, 1200) }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 200)}`);
+    const blob = await res.blob();
+    if (state.audio) { state.audio.pause(); URL.revokeObjectURL(state.audio.src); }
+    state.audio = new Audio(URL.createObjectURL(blob));
+    state.audio.addEventListener("ended", () => { $("btn-stop-speak").hidden = true; });
+    $("btn-stop-speak").hidden = false;
+    await state.audio.play();
+    setStatus(`Reading aloud with ${TTS_MODEL}.`);
+  } catch (error) {
+    setStatus(`Read-aloud failed: ${error.message}`, true);
+  }
+}
+
+function stopSpeaking() {
+  if (state.audio) state.audio.pause();
+  $("btn-stop-speak").hidden = true;
+}
+
+/* ---------------- boot ---------------- */
+
+function boot() {
+  const select = $("model");
+  for (const model of MODELS) {
+    const option = document.createElement("option");
+    option.value = model;
+    option.textContent = model;
+    select.append(option);
+  }
+  select.onchange = () => { $("model-name").textContent = select.value; };
+
+  saveToken(readToken());
+  $("btn-signin").onclick = signIn;
+  $("btn-signout").onclick = () => { saveToken(null); setStatus("Signed out. The token is gone from this tab."); };
+  $("btn-cancel-signin").onclick = cancelSignIn;
+  $("signin-dialog").addEventListener("close", cancelSignIn);
+  $("btn-camera").onclick = () => {
+    if (state.stream) { stopStream(); setStatus("Camera stopped."); }
+    else startCamera();
+  };
+  $("btn-capture").onclick = capture;
+  $("btn-file").onclick = () => $("file").click();
+  $("file").onchange = pickFile;
+  $("btn-retake").onclick = () => {
+    state.photo = null;
+    state.reading = null;
+    $("shot").hidden = true;
+    $("viewer-empty").hidden = false;
+    $("btn-retake").hidden = true;
+    $("reading").hidden = true;
+    $("placeholder").hidden = false;
+    $("answers").textContent = "";
+    setStatus("Take another picture.");
+  };
+  $("btn-ask").onclick = ask;
+  $("question").addEventListener("keydown", (event) => { if (event.key === "Enter") ask(); });
+  $("btn-speak").onclick = speak;
+  $("btn-stop-speak").onclick = stopSpeaking;
+  window.addEventListener("beforeunload", stopStream);
+}
+
+boot();
+</script>
+</body>
+</html>

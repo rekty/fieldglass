@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1210">
 <title>Fieldglass — point your camera, learn what you see</title>
 <meta name="description" content="Point your camera at a rock, a plant or a building. A Pollinations vision model tells you what it is and what to notice, and reads the answer aloud.">
 <style>
@@ -33,7 +34,8 @@
   a { color: var(--accent); }
   header {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    padding: 14px 18px; border-bottom: 1px solid var(--line);
+    padding: 14px max(18px, env(safe-area-inset-right)) 14px max(18px, env(safe-area-inset-left));
+    border-bottom: 1px solid var(--line);
     background: rgba(11,18,16,.72); backdrop-filter: blur(10px);
     position: sticky; top: 0; z-index: 5;
   }
@@ -65,7 +67,10 @@
     background: linear-gradient(95deg, var(--accent) 0%, #7fe6c4 100%);
   }
   button.ghost { background: transparent; }
-  main { max-width: 1120px; margin: 0 auto; padding: 18px 18px 40px; }
+  main {
+    max-width: 1120px; margin: 0 auto;
+    padding: 18px max(18px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  }
   .grid { display: grid; grid-template-columns: minmax(300px, 430px) 1fr; gap: 16px; align-items: start; }
   @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
   .card {
@@ -166,6 +171,7 @@
       </div>
       <div class="row">
         <button class="ghost" id="btn-file">Choose a photo</button>
+        <button class="ghost" id="btn-sample">Try a sample photo</button>
         <button class="ghost" id="btn-retake" hidden>Retake</button>
       </div>
       <input type="file" id="file" accept="image/*" capture="environment" hidden>
@@ -229,7 +235,7 @@
   </a>
   <p>
     Photos go to Pollinations vision and text models with your own balance.
-    Nothing is uploaded until you press Take picture or Choose a photo, and nothing is stored by this page.
+    Nothing is uploaded until you take, choose or load a photo, and nothing is stored by this page.
   </p>
 </footer>
 
@@ -292,17 +298,26 @@ async function signIn() {
   const dialog = $("signin-dialog");
   dialog.showModal();
   $("device-note").textContent = "Waiting for approval…";
+  // Open the tab now, while the click still counts as a user gesture: after the
+  // await below, browsers treat window.open as a popup and block it.
+  const approval = window.open("about:blank", "_blank");
+  if (approval) {
+    try { approval.opener = null; } catch { /* ignore */ }
+    try { approval.document.title = "Approve Fieldglass"; } catch { /* ignore */ }
+  }
   let device;
   try {
     device = await postJson(`${ENTER}/api/device/code`, { scope: "generate" });
   } catch (error) {
+    if (approval && !approval.closed) approval.close();
     $("device-note").textContent = `Could not start sign-in: ${error.message}`;
     return;
   }
   $("device-code").textContent = device.user_code;
   const url = device.verification_uri_complete || device.verification_uri;
   $("device-link").href = url;
-  window.open(url, "_blank", "noopener");
+  if (approval && !approval.closed) approval.location.href = url;
+  else $("device-note").textContent = "The tab was blocked. Open the approval page with the link above.";
 
   const interval = Math.max(3, Number(device.interval) || 5);
   const deadline = Date.now() + (Number(device.expires_in) || 1800) * 1000;
@@ -406,6 +421,14 @@ function capture() {
     return;
   }
   usePhoto(shrink(video, video.videoWidth, video.videoHeight));
+}
+
+function loadSample() {
+  setStatus("Loading the sample photo…");
+  const img = new Image();
+  img.onload = () => usePhoto(shrink(img, img.naturalWidth, img.naturalHeight));
+  img.onerror = () => setStatus("Could not load the sample photo. Use “Choose a photo” instead.", true);
+  img.src = "docs/sample.jpg";
 }
 
 function pickFile(event) {
@@ -644,6 +667,7 @@ function boot() {
   };
   $("btn-capture").onclick = capture;
   $("btn-file").onclick = () => $("file").click();
+  $("btn-sample").onclick = loadSample;
   $("file").onchange = pickFile;
   $("btn-retake").onclick = () => {
     state.photo = null;

@@ -17,10 +17,11 @@ Live: https://rekty.github.io/fieldglass/
    `/api/device/token`). You approve a short code in the browser; the access token
    stays in `sessionStorage` for that tab only. Nothing is pasted, and the page holds
    no owner key.
-2. **Take a picture.** `getUserMedia` with `facingMode: environment`, or the photo
-   picker (`capture="environment"`) when there is no camera — which is also how the
-   app works on a desktop. The frame is scaled to at most 1024 px and sent as a JPEG
-   data URI. Nothing is uploaded before you take or choose a picture.
+2. **Take a picture.** `getUserMedia` with `facingMode: environment`, the photo
+   picker (`capture="environment"`) when there is no camera, or **Try a sample
+   photo** (`docs/sample.jpg`) to see a reading without a camera at all. The frame is
+   scaled to at most 1024 px and sent as a JPEG data URI. Nothing is uploaded before
+   you take, choose or load a picture.
 3. **Read it.** `POST https://gen.pollinations.ai/v1/chat/completions` with
    `openai/gpt-5.4-nano` — free (`paid_only: false`) and the model's
    `input_modalities` include `image`. The reply is a JSON object:
@@ -54,7 +55,8 @@ python3 -m http.server 8781
 # open http://localhost:8781
 ```
 
-A camera needs `https` or `localhost`. Without one, use **Choose a photo**.
+A camera needs `https` or `localhost`. Without one, use **Choose a photo** or
+**Try a sample photo**.
 
 ## Files
 
